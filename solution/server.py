@@ -17,7 +17,7 @@ class Orden:
         self.code = code
         self.expiration = expiration
         
-class OrdenCliente:
+class OrdenCompra:
     def __init__(self, orden_type, id, client, status, payment, shipping, products, code, expiration):
         self.orden_type = orden_type
         self.id = id
@@ -25,24 +25,25 @@ class OrdenCliente:
         self.status = status
         self.payment = payment
         self.shipping = shipping
-        self.products = []
+        for producto in enumerate(products):
+            self.products = producto
         self.code = code
         self.expiration = expiration
 
-class Fisico(OrdenCliente):
+class Fisica(OrdenCompra):
     def __init__(self, id, client, status, payment, shipping, products, code, expiration):
         super().__init__("fisico", id, client, status, payment, shipping, products, code, expiration)
 
-class Digital(OrdenCliente):
+class Digital(OrdenCompra):
     def __init__(self, id, client, status, payment, shipping, products, code, expiration):
-        super().__init__("digital", id,client, status, payment, shipping, products, code, expiration)
+        super().__init__("digital", id, client, status, payment, shipping, products, code, expiration)
 
 
 class OrdenFactory:
     @staticmethod
     def create_orden(orden_type, id, client, status, payment, shipping, products, code, expiration):
         if orden_type == "fisico":
-            return Fisico(id, client, status, payment, shipping, products, code, expiration)
+            return Fisica(id, client, status, payment, shipping, products, code, expiration)
         elif orden_type == "digital":
             return Digital(id, client, status, payment, shipping, products, code, expiration)
         else:
@@ -58,15 +59,14 @@ class OrdenService:
         orden_type = data.get("orden_type", None)
         id = data.get("id", None)
         client = data.get("client", None)
-        status = data.get("status", [])
-        payment = data.get("payment", [])
+        status = data.get("status", None)
+        payment = data.get("payment", None)
         shipping = data.get("shipping", None)
         products = data.get("products", [])
         code = data.get("code", None)
         expiration = data.get("expiration", None)
-        
+
         orden = self.factory.create_orden(orden_type, contadorID, client, status, payment, shipping, products, code, expiration)
-        
         ordenes.append(orden.__dict__)
         return {
             'orden_type': orden.orden_type, 'id':orden.id, 'client': orden.status, 'payment': orden.payment, 'shipping': orden.payment, 'shipping': orden.shipping, 'products': orden.products, 'code': orden.code, 'expiration':orden.expiration
@@ -78,8 +78,8 @@ class OrdenService:
             orden = ordenes[index]
             client = data.get("client", None)
             status = data.get("status", None)
-            payment = data.get("payment", [])
-            shipping = data.get("shipping", [])
+            payment = data.get("payment", None)
+            shipping = data.get("shipping", None)
             products = data.get("products", [])
             code = data.get("code", None)
             expiration = data.get("expiration", None)
@@ -93,11 +93,11 @@ class OrdenService:
     def eliminar_orden(self, id):
         index = self.buscar_index_por_id(id)
         if index!=None:
-            del ordenes[index]
-            return {"message": "Orden eliminado"}
+            for orden in ordenes:
+                if orden["id"]==id:
+                    return ordenes.pop(index)
         else:
             return None
-        
 
     def buscar_index_por_id(self, id):
         return next(
@@ -129,20 +129,12 @@ class OrdenRequestHandler(BaseHTTPRequestHandler):
         self.orden_service = OrdenService()
         super().__init__(*args, **kwargs)
 
-    def do_POST(self):
-        if self.path == "/orders":
-            data = HTTPDataHandler.handle_reader(self)
-            response_data = self.orden_service.agregar_orden(data)
-            HTTPDataHandler.handle_response(self, 201, response_data)
-        else:
-            HTTPDataHandler.handle_response(self, 404, {"message": "Ruta no encontrada"})
-
     def do_GET(self):
-        parsed_path = urlparse(self.path)
-        query_params = parse_qs(parsed_path.query)
+        parsed = urlparse(self.path)
+        query_params = parse_qs(parsed.query)
         if self.path == "/orders":
             HTTPDataHandler.handle_response(self, 200, ordenes)
-        elif parsed_path.path == "/orders":
+        elif parsed.path == "/orders":
             if "status" in query_params:
                 status= query_params["status"][0]
                 ordenes_obtenidos = self.orden_service.buscar_pedidos(status)
@@ -150,6 +142,14 @@ class OrdenRequestHandler(BaseHTTPRequestHandler):
                     HTTPDataHandler.handle_response(self, 200, ordenes_obtenidos)
                 else:
                     HTTPDataHandler.handle_response(self, 204, [])
+        else:
+            HTTPDataHandler.handle_response(self, 404, {"message": "Ruta no encontrada"})
+            
+    def do_POST(self):
+        if self.path == "/orders":
+            data = HTTPDataHandler.handle_reader(self)
+            response_data = self.orden_service.agregar_orden(data)
+            HTTPDataHandler.handle_response(self, 201, response_data)
         else:
             HTTPDataHandler.handle_response(self, 404, {"message": "Ruta no encontrada"})
 
@@ -170,7 +170,7 @@ class OrdenRequestHandler(BaseHTTPRequestHandler):
             id = int(self.path.split("/")[-1])
             response_data = self.orden_service.eliminar_orden(id)
             if response_data:
-                HTTPDataHandler.handle_response(self, 200, response_data)
+                HTTPDataHandler.handle_response(self, 200, {"Mensaje": "Orden eliminada"})
             else:
                 HTTPDataHandler.handle_response(self, 404, {"Mensaje": "Orden no encontrado"})
         else:
